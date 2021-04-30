@@ -44,8 +44,23 @@ public:
 		/** Host name of remote TCP service */
 		FString HostName;
 
+		static FString GetKeyNameForHostName()
+		{
+			return TEXT("HostName");
+		}
+
 		/** Port number for */
 		int32 Port;
+
+		int32 GetKeyNameForPort()
+		{
+			return Port;
+		}
+
+		Config()
+		{
+			Port = 0;
+		}
 	};
 
 	//--------------------------------------------------------------------------
@@ -56,9 +71,19 @@ public:
 	 * IAnalyticsProviderModule interface.
 	 * Creates the analytics provider given a configuration delegate.
 	 * The keys required exactly match the field names in the Config object.
+	 *
+	 * When a particular provider module is loaded, it will create an instance and use the
+	 * provided Configuration delegate to configure each provider.
 	 */
 	virtual TSharedPtr<IAnalyticsProvider> CreateAnalyticsProvider(
-		const FAnalyticsProviderConfigurationDelegate& GetConfigValue) const override;
+		const FAnalyticsProviderConfigurationDelegate& GetConfigValue) const;
+
+	/**
+	 * Construct an analytics provider directly from a config object (and a delegate to provide configuration to each configured
+	 * provider).
+	 */
+	virtual TSharedPtr<IAnalyticsProvider> CreateAnalyticsProvider(
+		const Config& ConfigValues, const FAnalyticsProviderConfigurationDelegate& GetConfigValue) const;
 
 private:
 	virtual void StartupModule() override;

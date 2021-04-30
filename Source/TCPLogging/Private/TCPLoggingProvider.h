@@ -10,32 +10,18 @@ class Error;
 
 class FAnalyticsProviderTCPLogging : public IAnalyticsProvider
 {
-	/** Path where analytics files are saved out */
-	FString AnalyticsFilePath;
+public:
 	/** Tracks whether we need to start the session or restart it */
 	bool bHasSessionStarted;
-	/** Whether an event was written before or not */
-	bool bHasWrittenFirstEvent;
 	/** Id representing the user the analytics are recording for */
 	FString UserId;
 	/** Unique Id representing the session the analytics are recording for */
 	FString SessionId;
-	/** Holds the Age if set */
-	int32 Age;
-	/** Holds the Location of the user if set */
-	FString Location;
-	/** Holds the Gender of the user if set */
-	FString Gender;
-	/** Holds the build info if set */
-	FString BuildInfo;
-	/** The file archive used to write the data */
-	FArchive* FileArchive;
 
-public:
 	/** Host name of remote TCP service */
 	FString HostName;
 
-	/** Port number for */
+	/** Port number for remote server */
 	int32 Port;
 
 protected:
@@ -66,10 +52,6 @@ public:
 
 	virtual void RecordCurrencyGiven(const FString& GameCurrencyType, int GameCurrencyAmount) override;
 
-	virtual void SetBuildInfo(const FString& InBuildInfo) override;
-	virtual void SetGender(const FString& InGender) override;
-	virtual void SetLocation(const FString& InLocation) override;
-	virtual void SetAge(const int32 InAge) override;
 
 	virtual void RecordItemPurchase(
 		const FString& ItemId, int ItemQuantity, const TArray<FAnalyticsEventAttribute>& EventAttrs) override;
@@ -82,5 +64,5 @@ public:
 		const FString& ProgressType, const FString& ProgressHierarchy, const TArray<FAnalyticsEventAttribute>& EventAttrs) override;
 
 protected:
-	void VSendJSON(FString& serialized);
+	void SendJSON(FString& serialized);
 };
