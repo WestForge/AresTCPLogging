@@ -5,9 +5,9 @@
   "FriendlyName": "TCP Logging Analytics Provider",
   "Description": "Writes analytic API calls to a TCP server in JSON format",
   "Category": "Analytics",
-  "CreatedBy": "",
-  "CreatedByURL": "",
-  "DocsURL": "",
+  "CreatedBy": "BadApe",
+  "CreatedByURL": "https://badape.net/",
+  "DocsURL": "https://badape.net/",
   "MarketplaceURL": "",
   "SupportURL": "",
   "EnabledByDefault": false,
@@ -19,6 +19,11 @@
       "Name": "TCPLogging",
       "Type": "Runtime",
       "LoadingPhase": "PreDefault"
+    },
+    {
+      "Name": "TCPLoggingEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
     }
   ]
 }

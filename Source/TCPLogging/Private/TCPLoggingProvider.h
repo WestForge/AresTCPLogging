@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Analytics.h"
 #include "AnalyticsEventAttribute.h"
 #include "CoreMinimal.h"
 #include "Interfaces/IAnalyticsProvider.h"
@@ -18,20 +19,33 @@ public:
 	/** Unique Id representing the session the analytics are recording for */
 	FString SessionId;
 
-	/** Host name of remote TCP service */
-	FString HostName;
-
-	/** Port number for remote server */
+	FString Host;
 	int32 Port;
 
-protected:
-	bool connected;
+	static TSharedPtr<IAnalyticsProvider> Provider;
 
+protected:
+
+	// TSharedRef<FInternetAddr> Addr;
 	FSocket* Socket;
 
 public:
-	FAnalyticsProviderTCPLogging();
+	FAnalyticsProviderTCPLogging(const FString HostName, int32 Port);
 	virtual ~FAnalyticsProviderTCPLogging();
+
+	static TSharedPtr<IAnalyticsProvider> Create(const FString HostName, int32 Port)
+	{
+		if (!Provider.IsValid())
+		{
+			Provider = TSharedPtr<IAnalyticsProvider>(new FAnalyticsProviderTCPLogging(HostName, Port));
+		}
+		return Provider;
+	}
+
+	static void Destroy()
+	{
+		Provider.Reset();
+	}
 
 	virtual bool StartSession(const TArray<FAnalyticsEventAttribute>& Attributes) override;
 	virtual void EndSession() override;
@@ -51,7 +65,6 @@ public:
 		float RealMoneyCost, const FString& PaymentProvider) override;
 
 	virtual void RecordCurrencyGiven(const FString& GameCurrencyType, int GameCurrencyAmount) override;
-
 
 	virtual void RecordItemPurchase(
 		const FString& ItemId, int ItemQuantity, const TArray<FAnalyticsEventAttribute>& EventAttrs) override;
