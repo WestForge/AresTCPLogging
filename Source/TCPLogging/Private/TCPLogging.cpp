@@ -4,6 +4,7 @@
 
 #include "Analytics.h"
 #include "AnalyticsEventAttribute.h"
+//#include "GenericPlatform/GenericPlatformMisc.h"
 #include "HAL/FileManager.h"
 #include "Interfaces/IPv4/IPv4Address.h"
 #include "Misc/CString.h"
@@ -21,12 +22,17 @@ IMPLEMENT_MODULE(FAnalyticsTCPLogging, TCPLogging)
 
 TSharedPtr<IAnalyticsProvider> FAnalyticsProviderTCPLogging::Provider;
 
-FAnalyticsProviderTCPLogging::FAnalyticsProviderTCPLogging(const FString HostName, int32 PortNum)
+FAnalyticsProviderTCPLogging::FAnalyticsProviderTCPLogging(
+	const FString HostName, int32 PortNum, bool bGenerateSession, bool bTimeStamp)
 {
 	UE_LOG(LogTCPLoggingAnalytics, Verbose, TEXT("Initializing TCP Analytics provider"));
 
 	Host = HostName;
 	Port = PortNum;
+	bGenerateSessionGuid = bGenerateSession;
+	bTimeStampEvents = bTimeStamp;
+
+	UserId = FPlatformMisc::GetLoginId();
 
 	Socket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("default"), false);
 }
@@ -48,13 +54,14 @@ TSharedPtr<IAnalyticsProvider> FAnalyticsTCPLogging::CreateAnalyticsProvider(
 	{
 		const FString HostName = GetConfigValue.Execute(TEXT("TCPLoggingHostName"), true);
 		const FString PortText = GetConfigValue.Execute(TEXT("TCPLoggingPort"), true);
+		const bool bGenerateSessionGuid = GetConfigValue.Execute(TEXT("TCPLoggingGenerateSessionGuid"), true).ToBool();
+		const bool bTimeStampEvents = GetConfigValue.Execute(TEXT("TCPLoggingTimeStampEvents"), true).ToBool();
 
-		// int32 Port = FCString::Atoi(*PortText);
 		int32 Port;
 
 		if (FDefaultValueHelper::ParseInt(PortText, Port))
 		{
-			return FAnalyticsProviderTCPLogging::Create(HostName, Port);
+			return FAnalyticsProviderTCPLogging::Create(HostName, Port, bGenerateSessionGuid, bTimeStampEvents);
 		}
 		else
 		{
@@ -86,6 +93,16 @@ bool FAnalyticsProviderTCPLogging::StartSession(const TArray<FAnalyticsEventAttr
 		EndSession();
 	}
 
+	if (bGenerateSessionGuid)
+	{
+		FGuid SessionGUID;
+		FGenericPlatformMisc::CreateGuid(SessionGUID);
+		SessionId = SessionGUID.ToString(EGuidFormats::DigitsWithHyphensInBraces);
+		DeviceId = FPlatformMisc::GetDeviceId();
+
+		// UserId = FPlatformMisc::GetLoginId();
+	}
+
 	Socket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("default"), false);
 	ISocketSubsystem* SocketSubSystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
 
@@ -110,12 +127,19 @@ bool FAnalyticsProviderTCPLogging::StartSession(const TArray<FAnalyticsEventAttr
 
 		if (bHasSessionStarted)
 		{
-			UserId = FPlatformMisc::GetLoginId();
-			SessionId = UserId + TEXT("-") + FDateTime::Now().ToString();
-
 			FString message = FString::Printf(TEXT("{"));
 			message.Append(FString::Printf(TEXT("\"eventName\" : \"Session.Start\",")));
-			message.Append(FString::Printf(TEXT("\"sessionId\" : \"%s\""), *SessionId));
+			if (bGenerateSessionGuid)
+			{
+				message.Append(FString::Printf(TEXT("\"sessionId\" : \"%s\","), *SessionId));
+				message.Append(FString::Printf(TEXT("\"deviceId\" : \"%s\","), *DeviceId));
+			}
+			if (bTimeStampEvents)
+			{
+				message.Append(FString::Printf(TEXT("\"timestamp\" : \"%s\","), *FDateTime::Now().ToString()));
+			}
+			message.Append(FString::Printf(TEXT("\"userId\" : \"%s\""), *UserId));
+
 			if (Attributes.Num() > 0)
 			{
 				message.Append(FString::Printf(TEXT(",\"attributes\" : [")));
@@ -129,7 +153,14 @@ bool FAnalyticsProviderTCPLogging::StartSession(const TArray<FAnalyticsEventAttr
 					}
 					message.Append(FString::Printf(TEXT("{")));
 					message.Append(FString::Printf(TEXT("\"name\" : \"%s\","), *Attr.GetName()));
-					message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+					if (Attr.GetValue().IsNumeric())
+					{
+						message.Append(FString::Printf(TEXT("\"value\" : %s"), *Attr.GetValue()));
+					}
+					else
+					{
+						message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+					}
 					message.Append(FString::Printf(TEXT("}")));
 					bHasWrittenFirstAttr = true;
 				}
@@ -224,7 +255,14 @@ void FAnalyticsProviderTCPLogging::RecordEvent(const FString& EventName, const T
 				}
 				message.Append(FString::Printf(TEXT("{")));
 				message.Append(FString::Printf(TEXT("\"name\" : \"%s\","), *Attr.GetName()));
-				message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+				if (Attr.GetValue().IsNumeric())
+				{
+					message.Append(FString::Printf(TEXT("\"value\" : %s"), *Attr.GetValue()));
+				}
+				else
+				{
+					message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+				}
 				message.Append(FString::Printf(TEXT("}")));
 				bHasWrittenFirstAttr = true;
 			}
@@ -363,7 +401,14 @@ void FAnalyticsProviderTCPLogging::RecordError(const FString& Error, const TArra
 		{
 			message.Append(FString::Printf(TEXT("\t\t\t{")));
 			message.Append(FString::Printf(TEXT("\t\t\t\t\"name\" : \"%s\","), *Attr.GetName()));
-			message.Append(FString::Printf(TEXT("\t\t\t\t\"value\" : \"%s\""), *Attr.GetValue()));
+			if (Attr.GetValue().IsNumeric())
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : %s"), *Attr.GetValue()));
+			}
+			else
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+			}
 			message.Append(FString::Printf(TEXT("\t\t\t}")));
 			bHasWrittenFirstAttr = true;
 		}
@@ -406,7 +451,14 @@ void FAnalyticsProviderTCPLogging::RecordProgress(
 			}
 			message.Append(FString::Printf(TEXT("\t\t\t{")));
 			message.Append(FString::Printf(TEXT("\t\t\t\t\"name\" : \"%s\","), *Attr.GetName()));
-			message.Append(FString::Printf(TEXT("\t\t\t\t\"value\" : \"%s\""), *Attr.GetValue()));
+			if (Attr.GetValue().IsNumeric())
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : %s"), *Attr.GetValue()));
+			}
+			else
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+			}
 			message.Append(FString::Printf(TEXT("\t\t\t}")));
 			bHasWrittenFirstAttr = true;
 		}
@@ -450,7 +502,14 @@ void FAnalyticsProviderTCPLogging::RecordItemPurchase(
 			}
 			message.Append(FString::Printf(TEXT("{")));
 			message.Append(FString::Printf(TEXT("\"name\" : \"%s\","), *Attr.GetName()));
-			message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+			if (Attr.GetValue().IsNumeric())
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : %s"), *Attr.GetValue()));
+			}
+			else
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+			}
 			message.Append(FString::Printf(TEXT("}")));
 			bHasWrittenFirstAttr = true;
 		}
@@ -494,7 +553,14 @@ void FAnalyticsProviderTCPLogging::RecordCurrencyPurchase(
 			}
 			message.Append(FString::Printf(TEXT("{")));
 			message.Append(FString::Printf(TEXT("\"name\" : \"%s\","), *Attr.GetName()));
-			message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+			if (Attr.GetValue().IsNumeric())
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : %s"), *Attr.GetValue()));
+			}
+			else
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+			}
 			message.Append(FString::Printf(TEXT("}")));
 			bHasWrittenFirstAttr = true;
 		}
@@ -538,7 +604,14 @@ void FAnalyticsProviderTCPLogging::RecordCurrencyGiven(
 			}
 			message.Append(FString::Printf(TEXT("{")));
 			message.Append(FString::Printf(TEXT("\"name\" : \"%s\","), *Attr.GetName()));
-			message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+			if (Attr.GetValue().IsNumeric())
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : %s"), *Attr.GetValue()));
+			}
+			else
+			{
+				message.Append(FString::Printf(TEXT("\"value\" : \"%s\""), *Attr.GetValue()));
+			}
 			message.Append(FString::Printf(TEXT("}")));
 			bHasWrittenFirstAttr = true;
 		}

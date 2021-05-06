@@ -22,22 +22,27 @@ public:
 	FString Host;
 	int32 Port;
 
+	bool bGenerateSessionGuid;
+	bool bTimeStampEvents;
+
 	static TSharedPtr<IAnalyticsProvider> Provider;
 
 protected:
-
 	// TSharedRef<FInternetAddr> Addr;
 	FSocket* Socket;
 
+
 public:
-	FAnalyticsProviderTCPLogging(const FString HostName, int32 Port);
+	FAnalyticsProviderTCPLogging(const FString HostName, int32 Port, bool bGenerateSessionGuid, bool bTimeStampEvents);
 	virtual ~FAnalyticsProviderTCPLogging();
 
-	static TSharedPtr<IAnalyticsProvider> Create(const FString HostName, int32 Port)
+	static TSharedPtr<IAnalyticsProvider> Create(
+		const FString HostName, int32 Port, bool bGenerateSessionGuid, bool bTimeStampEvents)
 	{
 		if (!Provider.IsValid())
 		{
-			Provider = TSharedPtr<IAnalyticsProvider>(new FAnalyticsProviderTCPLogging(HostName, Port));
+			Provider = TSharedPtr<IAnalyticsProvider>(
+				new FAnalyticsProviderTCPLogging(HostName, Port, bGenerateSessionGuid, bTimeStampEvents));
 		}
 		return Provider;
 	}
